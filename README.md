@@ -1,7 +1,10 @@
 # ⚠️ AI Assistance Notice
-
-This application was developed with substantial assistance from ChatGPT (OpenAI). The implementation, structure, debugging, and code generation were AI-assisted.
+This application was developed with substantial assistance from LLMs.
+The implementation, structure, debugging, and code generation were AI-assisted.
 Human decisions, feature selection, testing, and project direction were provided by the project creator.
+
+1.0 and 1.1 Versions: ChatGPT.
+1.2: Claude.
 
 # JPG → PDF Combiner without compression
 
@@ -61,7 +64,7 @@ combined_photo001.pdf
 
 Executable generated with PyInstaller:
 
-pyinstaller --onefile --windowed --hidden-import=tkinterdnd2
+pyinstaller --onefile --windowed --hidden-import=tkinterdnd2 --exclude-module matplotlib --exclude-module numpy --exclude-module pandas --exclude-module scipy jpg_to_pdf_gui.py
 
 ### Notes
 

@@ -1,7 +1,9 @@
 import os
 import sys
+import tempfile
+import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 
 from PIL import Image, ImageTk
 import img2pdf
@@ -9,6 +11,14 @@ from tkinterdnd2 import TkinterDnD, DND_FILES
 
 
 class JPGtoPDFApp:
+
+    # Any image with a smaller side under this many pixels is treated
+    # as an intentional blank spacer page rather than real content.
+    MIN_BLANK_PX = 10
+
+    # Used to size a blank page when there are no "real" images in the
+    # batch to infer a sensible size from (rough Letter-ish proportions).
+    DEFAULT_BLANK_SIZE = (850, 1100)
 
     def __init__(self, root):
 
@@ -232,17 +242,49 @@ class JPGtoPDFApp:
             padx=5
         )
 
-        tk.Button(
+        self.create_button = tk.Button(
             bottom,
             text="Create PDF",
             height=2,
             command=self.make_pdf
-        ).grid(
+        )
+
+        self.create_button.grid(
             row=2,
             column=0,
             columnspan=3,
             sticky="ew",
-            pady=15
+            pady=(15,5)
+        )
+
+        # ---- Progress bar + status label ----
+
+        self.progress = ttk.Progressbar(
+            bottom,
+            orient="horizontal",
+            mode="determinate",
+            maximum=100
+        )
+
+        self.progress.grid(
+            row=3,
+            column=0,
+            columnspan=3,
+            sticky="ew"
+        )
+
+        self.status_var = tk.StringVar(value="")
+
+        tk.Label(
+            bottom,
+            textvariable=self.status_var,
+            anchor="w"
+        ).grid(
+            row=4,
+            column=0,
+            columnspan=3,
+            sticky="ew",
+            pady=(5,0)
         )
 
 
@@ -429,18 +471,149 @@ class JPGtoPDFApp:
 
             return
 
-        out=os.path.join(
+        out = os.path.join(
             self.output_var.get(),
             self.filename_var.get()
         )
 
-        with open(out,"wb") as f:
+        # Lock down the UI while the conversion runs
+        self.create_button.config(state="disabled")
+        self.progress["value"] = 0
+        self.status_var.set("Starting...")
 
-            f.write(
-                img2pdf.convert(
-                    self.images
+        images_snapshot = list(self.images)
+
+        worker = threading.Thread(
+            target=self._convert_worker,
+            args=(images_snapshot, out),
+            daemon=True
+        )
+
+        worker.start()
+
+
+    def _convert_worker(self, images, out):
+        """Runs on a background thread. Only touches Tk via self.root.after()."""
+
+        total_steps = len(images) + 1  # +1 for the final write step
+        prepared = []
+
+        try:
+
+            # First pass: look at every image's real pixel size so we
+            # know how to size any blank spacer pages. img2pdf needs
+            # each page between 3 and 14400 PDF units, so a 1x1 filler
+            # image can't be handed to it directly - it has to be
+            # regenerated at a sane size first.
+            real_sizes = []
+
+            for path in images:
+                with Image.open(path) as im:
+                    w, h = im.size
+
+                if min(w, h) >= self.MIN_BLANK_PX:
+                    real_sizes.append((w, h))
+
+            if real_sizes:
+                target_w = sum(s[0] for s in real_sizes) // len(real_sizes)
+                target_h = sum(s[1] for s in real_sizes) // len(real_sizes)
+            else:
+                target_w, target_h = self.DEFAULT_BLANK_SIZE
+
+            with tempfile.TemporaryDirectory() as tmp_dir:
+
+                for idx, path in enumerate(images, start=1):
+
+                    with Image.open(path) as im:
+                        w, h = im.size
+                        # Validate/decode so any genuinely broken file
+                        # (not just an intentional tiny blank) is caught.
+                        im.verify()
+
+                    if min(w, h) < self.MIN_BLANK_PX:
+
+                        path_to_use = self._make_blank_page(
+                            tmp_dir, idx, target_w, target_h
+                        )
+
+                        label = f"Inserting blank page {idx}/{len(images)}"
+
+                    else:
+
+                        path_to_use = path
+                        label = (
+                            f"Processing {idx}/{len(images)}: "
+                            f"{os.path.basename(path)}"
+                        )
+
+                    prepared.append(path_to_use)
+
+                    pct = int((idx / total_steps) * 100)
+
+                    self.root.after(
+                        0,
+                        self._update_progress,
+                        pct,
+                        label
+                    )
+
+                self.root.after(
+                    0,
+                    self._update_progress,
+                    int((len(images) / total_steps) * 100),
+                    "Building PDF..."
                 )
+
+                pdf_bytes = img2pdf.convert(prepared)
+
+                with open(out, "wb") as f:
+                    f.write(pdf_bytes)
+
+            self.root.after(0, self._update_progress, 100, "Done")
+            self.root.after(0, self._conversion_finished, out, None)
+
+        except Exception as exc:
+
+            self.root.after(0, self._conversion_finished, out, exc)
+
+
+    def _make_blank_page(self, tmp_dir, idx, width, height):
+        """Generate a plain white filler image sized to be a valid PDF page."""
+
+        safe_w = max(width, self.MIN_BLANK_PX)
+        safe_h = max(height, self.MIN_BLANK_PX)
+
+        blank = Image.new("RGB", (safe_w, safe_h), "white")
+
+        path = os.path.join(tmp_dir, f"_blank_{idx}.jpg")
+        blank.save(path, "JPEG")
+
+        return path
+
+
+    def _update_progress(self, pct, message):
+
+        self.progress["value"] = pct
+        self.status_var.set(message)
+
+
+    def _conversion_finished(self, out, error):
+
+        self.create_button.config(state="normal")
+
+        if error is not None:
+
+            self.progress["value"] = 0
+            self.status_var.set("Failed")
+
+            messagebox.showerror(
+                "Error",
+                f"Could not create PDF:\n{error}"
             )
+
+            return
+
+        self.status_var.set(f"Saved: {out}")
 
         messagebox.showinfo(
             "Done",
