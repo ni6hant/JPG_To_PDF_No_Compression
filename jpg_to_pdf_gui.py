@@ -305,7 +305,11 @@ class JPGtoPDFApp:
             event.data
         )
 
-        self.process_files(files)
+        temp_files = []
+        for f in files:
+            temp_files.append(f)
+
+        self.process_files(sorted(temp_files))
 
 
     def process_files(self, files):

@@ -3,3 +3,4 @@
 *.jpg
 *.pdf
 jpg_to_pdf_gui.spec
+venv

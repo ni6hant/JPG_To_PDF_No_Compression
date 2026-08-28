@@ -1,0 +1,2 @@
+py -m venv venv
+venv\Scripts\activate && python -m pip install --upgrade pip && pip install -r requirements.txt && pyinstaller --onefile --windowed --hidden-import=tkinterdnd2 --exclude-module matplotlib --exclude-module numpy --exclude-module pandas --exclude-module scipy jpg_to_pdf_gui.py && deactivate
