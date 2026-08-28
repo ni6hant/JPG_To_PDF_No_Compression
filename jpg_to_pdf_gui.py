@@ -141,6 +141,12 @@ class JPGtoPDFApp:
             command=self.sort_images
         ).grid(row=0,column=2)
 
+        tk.Button(
+            controls,
+            text="Sort Z-A",
+            command=self.sort_images_reverse
+        ).grid(row=0,column=3)
+
         # ---------------- RIGHT ----------------
 
         right = tk.Frame(main)
@@ -453,6 +459,11 @@ class JPGtoPDFApp:
     def sort_images(self):
 
         self.images.sort()
+        self.refresh_list()
+
+    def sort_images_reverse(self):
+
+        self.images.sort(reverse=True)
         self.refresh_list()
 
 
