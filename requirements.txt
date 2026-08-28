@@ -1,0 +1,5 @@
+pymupdf
+pyinstaller
+pillow
+tkinterdnd2
+img2pdf
