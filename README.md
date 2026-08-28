@@ -1,4 +1,4 @@
-# JPG → PDF Combiner without compression
+# JPG → PDF Combiner without compression 1.3
 A lightweight Windows utility for combining multiple JPG/JPEG images into a single PDF while preserving the original image data.
 
 ## LLM ≤1.2
