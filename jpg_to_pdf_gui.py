@@ -42,6 +42,14 @@ class JPGtoPDFApp:
 
         self.build_ui()
 
+    def get_start_dir(self) -> str:
+        """Best-effort guess of 'the folder the program was called from'."""
+        cwd = os.getcwd()
+        if os.path.isdir(cwd):
+            return cwd
+        if getattr(sys, "frozen", False):
+            return os.path.dirname(sys.executable)
+        return os.path.dirname(os.path.abspath(__file__))
 
     def build_ui(self):
 
@@ -201,9 +209,7 @@ class JPGtoPDFApp:
             sticky="w"
         )
 
-        self.output_var = tk.StringVar(
-            value=self.launch_dir
-        )
+        self.output_var = tk.StringVar(value=self.get_start_dir())
 
         tk.Entry(
             bottom,
@@ -299,7 +305,7 @@ class JPGtoPDFApp:
         files = filedialog.askopenfilenames(
             filetypes=[
                 ("JPEG Images","*.jpg *.jpeg")
-            ]
+            ], initialdir = self.get_start_dir()
         )
 
         self.process_files(files)
@@ -469,7 +475,7 @@ class JPGtoPDFApp:
 
     def select_output(self):
 
-        folder=filedialog.askdirectory()
+        folder=filedialog.askdirectory(initialdir = self.get_start_dir())
 
         if folder:
             self.output_var.set(folder)
