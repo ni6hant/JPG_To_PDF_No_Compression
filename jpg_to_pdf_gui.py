@@ -19,6 +19,8 @@ class JPGtoPDFApp:
     # Used to size a blank page when there are no "real" images in the
     # batch to infer a sensible size from (rough Letter-ish proportions).
     DEFAULT_BLANK_SIZE = (850, 1100)
+    
+    VALID_EXTS = (".jpg", ".jpeg", ".png")
 
     def __init__(self, root):
 
@@ -301,11 +303,12 @@ class JPGtoPDFApp:
 
 
     def add_images(self):
-
         files = filedialog.askopenfilenames(
-            filetypes=[
-                ("JPEG Images","*.jpg *.jpeg")
-            ], initialdir = self.get_start_dir()
+        filetypes=[
+            ("Images", "*.jpg *.jpeg *.png"),
+            ("JPEG Images", "*.jpg *.jpeg"),
+            ("PNG Images", "*.png"),
+        ], initialdir = self.get_start_dir()
         )
 
         self.process_files(files)
@@ -329,9 +332,7 @@ class JPGtoPDFApp:
         for f in files:
 
             if (
-                f.lower().endswith(
-                    (".jpg",".jpeg")
-                )
+                f.lower().endswith(self.VALID_EXTS)
                 and f not in self.images
             ):
 
@@ -351,6 +352,24 @@ class JPGtoPDFApp:
                 f"combined_{first}.pdf"
             )
 
+    def _png_to_jpg(self, tmp_dir, idx, path):
+        """Flatten a PNG (incl. transparency) onto white and save as JPEG."""
+
+        with Image.open(path) as im:
+            if im.mode in ("RGBA", "LA") or (
+                im.mode == "P" and "transparency" in im.info
+            ):
+                rgba = im.convert("RGBA")
+                background = Image.new("RGB", rgba.size, "white")
+                background.paste(rgba, mask=rgba.split()[3])
+                rgb = background
+            else:
+                rgb = im.convert("RGB")
+
+            out_path = os.path.join(tmp_dir, f"_png_{idx}.jpg")
+            rgb.save(out_path, "JPEG", quality=95)
+
+        return out_path
 
     def refresh_list(self):
 
@@ -558,6 +577,14 @@ class JPGtoPDFApp:
                         )
 
                         label = f"Inserting blank page {idx}/{len(images)}"
+
+
+                    elif path.lower().endswith(".png"):
+                        path_to_use = self._png_to_jpg(tmp_dir, idx, path)
+                        label = (
+                            f"Converting PNG {idx}/{len(images)}: "
+                            f"{os.path.basename(path)}"
+                        )
 
                     else:
 
